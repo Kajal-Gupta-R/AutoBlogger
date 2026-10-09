@@ -1,7 +1,7 @@
 [project]
 name = "autoblogger"
 version = "0.1.0"
-description = "Add your description here"
+description = "Scheduled LangGraph + Groq pipeline that writes and publishes ML/AI articles."
 readme = "README.md"
 authors = [
     { name = "kajalguptar8-boop", email = "kajalguptar8@gmail.com" }
