@@ -4,9 +4,8 @@ from backend.graph import build_graph
 def main():
     app = build_graph()
     result = app.invoke({})
-
-    print(f"TOPIC: {result['topic']}\n")
-    print(result["final"])
+    print(f"Saved: frontend/articles/{result['filename']}")
+    print(f"Topic: {result['topic']}")
 
 
 if __name__ == "__main__":
