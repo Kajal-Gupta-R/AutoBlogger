@@ -1,3 +1,6 @@
+import json
+
+from backend.storage import ARTICLES_DIR
 import random
 
 from langchain_groq import ChatGroq
@@ -28,8 +31,18 @@ def ask(prompt: str) -> str:
     return llm.invoke(prompt).content
 
 
+def used_topics() -> set[str]:
+    index_path = ARTICLES_DIR / "index.json"
+    if not index_path.exists():
+        return set()
+    entries = json.loads(index_path.read_text(encoding="utf-8"))
+    return {entry["title"] for entry in entries}
+
+
 def pick_topic(state: BlogState) -> dict:
-    return {"topic": random.choice(TOPICS)}
+    done = used_topics()
+    unused = [topic for topic in TOPICS if topic not in done]
+    return {"topic": random.choice(unused or TOPICS)}
 
 
 def write_outline(state: BlogState) -> dict:
