@@ -1,12 +1,13 @@
-from langchain_groq import ChatGroq
+from backend.graph import build_graph
 
-from backend.config import settings
 
-llm = ChatGroq(
-    api_key=settings.groq_api_key,
-    model=settings.model_name,
-    temperature=0.7,
-)
+def main():
+    app = build_graph()
+    result = app.invoke({})
 
-response = llm.invoke("Write a 3-sentence intro about what LangGraph is.")
-print(response.content)
+    print(f"TOPIC: {result['topic']}\n")
+    print(result["final"])
+
+
+if __name__ == "__main__":
+    main()
