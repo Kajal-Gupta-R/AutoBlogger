@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AutoBlogger</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1><a href="#">AutoBlogger</a></h1>
+    <p>AI-generated deep dives on machine learning</p>
+  </header>
+  <main>
+    <ul id="list"></ul>
+    <a id="back" href="#" hidden>&larr; All articles</a>
+    <article id="article" hidden></article>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
