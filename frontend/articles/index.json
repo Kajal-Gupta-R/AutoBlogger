@@ -1,5 +1,10 @@
 [
   {
+    "title": "Vector databases and how similarity search works",
+    "file": "2026-10-09-vector-databases-and-how-similarity-search-works.md",
+    "date": "2026-10-09"
+  },
+  {
     "title": "Evaluating LLM applications in production",
     "file": "2026-10-09-evaluating-llm-applications-in-production.md",
     "date": "2026-10-09"
