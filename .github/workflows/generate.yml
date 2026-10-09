@@ -1,0 +1,35 @@
+name: Generate article
+
+on:
+  schedule:
+    - cron: "0 4 * * *"   # every day at 04:00 UTC (9:30 AM IST)
+  workflow_dispatch:       # lets you run it manually from the Actions tab
+
+permissions:
+  contents: write          # needed so the job can push the new article
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Generate article
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: uv run python -m backend.run
+
+      - name: Commit and push new article
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/articles
+          git diff --cached --quiet || git commit -m "chore: add generated article"
+          git push
