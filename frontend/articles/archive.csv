@@ -1,0 +1,1236 @@
+date,title,link,content
+2026-10-10,Transformers explained from first principles,../#2026-10-10-transformers-explained-from-first-principles.md,"# Transformers Explained from First Principles  
+
+## 1. Introduction  
+
+- **Motivation** – Transformers dominate NLP, vision, and multimodal tasks because they scale efficiently with data and compute while capturing long‑range dependencies that recurrent networks struggle with.  
+- **Historical context** – Early sequence models (RNNs, LSTMs) processed tokens strictly sequentially, limiting parallelism. The *attention* mechanism (Bahdanau 2015) decoupled content from position, and the 2017 “Attention Is All You Need” paper showed that a stack of attention layers alone can replace recurrence entirely.  
+- **Goal** – Derive the Transformer from first principles, exposing every mathematical operation so you can reason about design choices instead of treating the model as a black box.  
+
+---
+
+## 2. Foundations: Linear Algebra & Probability Primer  
+
+| Concept | Relevance in Transformers |
+|---------|---------------------------|
+| **Vector** \(\mathbf{x}\in\mathbb{R}^d\) | Token embedding, query/key/value vectors |
+| **Matrix** \(\mathbf{W}\in\mathbb{R}^{d_{\text{out}}\times d_{\text{in}}}\) | Linear projections (e.g., \(\mathbf{Q}= \mathbf{X}\mathbf{W}_Q\)) |
+| **Tensor** \(\mathcal{X}\in\mathbb{R}^{n\times d}\) | Batch of \(n\) token embeddings |
+| **Dot‑product** \(\mathbf{a}^\top\mathbf{b}\) | Similarity between queries and keys |
+| **Softmax** \(\operatorname{softmax}(\mathbf{z})_i = \dfrac{e^{z_i}}{\sum_j e^{z_j}}\) | Turns raw scores into a categorical probability distribution over tokens |
+| **Gradient descent** – \(\theta \leftarrow \theta - \eta \nabla_\theta \mathcal{L}\) | Optimises all weight matrices jointly |
+
+*Key point*: The softmax converts the dot‑product similarity matrix into attention weights that sum to 1 for each query, i.e. a discrete probability distribution over sequence positions.  
+
+---
+
+## 3. The Core Idea: Scaled Dot‑Product Attention  
+
+Given a sequence matrix \(\mathbf{X}\in\mathbb{R}^{n\times d_{\text{model}}}\):
+
+1. **Linear projections**  
+
+   \[
+   \mathbf{Q}= \mathbf{X}\mathbf{W}_Q,\qquad
+   \mathbf{K}= \mathbf{X}\mathbf{W}_K,\qquad
+   \mathbf{V}= \mathbf{X}\mathbf{W}_V,
+   \]
+
+   where \(\mathbf{W}_Q,\mathbf{W}_K,\mathbf{W}_V\in\mathbb{R}^{d_{\text{model}}\times d_k}\).  
+
+2. **Score matrix (raw logits)**  
+
+   \[
+   \mathbf{S}= \frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d_k}} \in \mathbb{R}^{n\times n}.
+   \]
+
+   The factor \(\sqrt{d_k}\) prevents the dot‑product magnitude from growing with dimensionality, which would otherwise push the softmax into saturated regimes.  
+
+3. **Softmax normalisation (row‑wise)**  
+
+   \[
+   \mathbf{A}= \operatorname{softmax}(\mathbf{S})\in\mathbb{R}^{n\times n}.
+   \]  
+
+   Each row \(\mathbf{a}_i\) is a probability distribution over all tokens for query \(i\).  
+
+4. **Weighted sum of values**  
+
+   \[
+   \text{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V}) = \mathbf{A}\mathbf{V}\in\mathbb{R}^{n\times d_v}.
+   \]
+
+### Visual intuition  
+
+The matrix \(\mathbf{A}\) can be visualised as a heatmap: bright cells indicate strong focus of a query on particular keys.  
+
+### Minimal PyTorch implementation  
+
+```python
+import torch
+import torch.nn.functional as F
+
+def scaled_dot_product_attention(Q, K, V, mask=None):
+    """"""
+    Q, K, V: (batch, seq_len, d_k)
+    mask: (batch, seq_len, seq_len) with 0 for allowed positions, -inf otherwise
+    Returns (output, attention_weights)
+    """"""
+    d_k = Q.size(-1)
+    scores = torch.matmul(Q, K.transpose(-2, -1)) / d_k**0.5
+    if mask is not None:
+        scores = scores + mask          # mask adds -inf where attention is prohibited
+    attn_weights = F.softmax(scores, dim=-1)
+    output = torch.matmul(attn_weights, V)
+    return output, attn_weights
+```
+
+---
+
+## 4. Multi‑Head Attention & Positional Encoding  
+
+### Why multiple heads?  
+
+A single attention head projects inputs into one sub‑space, limiting the relationships it can capture. By using \(h\) heads with independent projection matrices \(\mathbf{W}_Q^{(i)},\mathbf{W}_K^{(i)},\mathbf{W}_V^{(i)}\), the model learns *diverse* similarity metrics in parallel.
+
+**Computation**  
+
+1. Compute attention for each head:  
+   \(\text{head}_i = \text{Attention}(Q_i, K_i, V_i)\).  
+2. Concatenate the heads:  
+
+   \[
+   \mathbf{H}= \operatorname{concat}\big(\text{head}_1,\dots,\text{head}_h\big)
+   \in\mathbb{R}^{n\times (h\cdot d_v)}.
+   \]  
+
+3. Final linear projection:  
+
+   \[
+   \mathbf{O}= \mathbf{H}\mathbf{W}_O,\qquad
+   \mathbf{W}_O\in\mathbb{R}^{(h\cdot d_v)\times d_{\text{model}}}.
+   \]
+
+### Positional encodings  
+
+Attention is permutation‑invariant; we must inject order information.
+
+| Type | Formula (position \(p\), dimension \(i\)) |
+|------|-------------------------------------------|
+| **Sinusoidal** | \(\displaystyle \text{PE}_{p,2i}= \sin\!\Big(\frac{p}{10000^{2i/d_{\text{model}}}}\Big)\)  <br> \(\displaystyle \text{PE}_{p,2i+1}= \cos\!\Big(\frac{p}{10000^{2i/d_{\text{model}}}}\Big)\) |
+| **Learned** | \(\mathbf{P}\in\mathbb{R}^{\text{max\_len}\times d_{\text{model}}}\) trained jointly with the model |
+
+The embedding for token \(t\) becomes \(\mathbf{x}_t = \mathbf{e}_t + \text{PE}_t\).
+
+---
+
+## 5. The Transformer Architecture  
+
+### Encoder block  
+
+```
+Input
+   │
+   ├─► Add & LayerNorm
+   │        │
+   │   Multi‑Head Self‑Attention
+   │        │
+   ├─► Add & LayerNorm
+   │        │
+   └─► Position‑wise Feed‑Forward
+```
+
+- **Self‑attention**: each token attends to *all* tokens in the same layer.  
+- **Feed‑forward network (FFN)**: two linear layers with a non‑linearity (ReLU or GELU) applied position‑wise  
+
+  \[
+  \text{FFN}(x)=\max(0, x\mathbf{W}_1 + b_1)\mathbf{W}_2 + b_2.
+  \]  
+
+- **Residual connections** (the “Add” steps) and **LayerNorm** stabilise training.  
+
+### Decoder block  
+
+1. **Masked self‑attention** – a causal mask prevents a token from attending to future positions.  
+2. **Encoder‑decoder (cross) attention** – queries come from the decoder, keys/values from the encoder output.  
+3. **FFN** – identical to the encoder’s.  
+
+Each sub‑layer is wrapped with residual + LayerNorm, exactly as in the encoder.  
+
+### Stacking  
+
+- **Depth** = number of encoder (or decoder) layers (e.g., 12, 24, 48).  
+- **Width** = model dimension \(d_{\text{model}}\) (e.g., 768, 1024).  
+Increasing depth improves abstraction; increasing width boosts capacity but also memory and compute.  
+
+### Complexity  
+
+| Operation | Time complexity | Memory complexity |
+|-----------|----------------|-------------------|
+| Self‑attention | \(O(n^2 d_{\text{model}})\) (because of the \(n\times n\) score matrix) | \(O(n^2)\) for the attention matrix |
+| Feed‑forward | \(O(n d_{\text{model}}^2)\) | \(O(n d_{\text{model}})\) |
+
+The total number of trainable parameters is roughly  
+
+\[
+\underbrace{(d_{\text{model}} d_k + d_{\text{model}} d_v + d_k d_v)}_{\text{per head}}
+\times h
+\;+\; 2d_{\text{model}}^2 \;\;(\text{FFN}) \;+\; \text{embeddings}.
+\]
+
+---
+
+## 6. Training Objectives & Popular Variants  
+
+| Model | Objective | Key architectural difference |
+|-------|-----------|-------------------------------|
+| **BERT** (Bidirectional Encoder Representations from Transformers) | Masked Language Modeling (MLM): predict randomly masked tokens. | Encoder‑only; bidirectional context. |
+| **GPT** (Generative Pre‑trained Transformer) | Autoregressive LM: predict the next token given all previous ones. | Decoder‑only stack with causal mask; unidirectional. |
+| **Vision Transformer (ViT)** | Image classification via patch embeddings + standard encoder. | Same architecture, different tokenisation (image patches). |
+| **RAG** (Retrieval‑Augmented Generation) | Combine a frozen retriever with a generative decoder. | Adds a cross‑attention step over retrieved documents. |
+
+**Fine‑tuning** – Replace the final head (e.g., classification, QA) and continue training on downstream data with a smaller learning rate.
+
+---
+
+## 7. Conclusion  
+
+- **Core principles** – Scaled dot‑product attention turns similarity scores into a probability distribution, enabling differentiable weighted aggregation of information across any distance. Multi‑head attention enriches this by learning several sub‑spaces simultaneously, while positional encodings restore order.  
+- **Practical takeaways**  
+  1. Visualise the attention matrix to verify that the model focuses on expected tokens.  
+  2. Reduce memory when \(n\) is large by using linear‑time approximations (e.g., Linformer, Performer).  
+  3. When implementing from scratch, double‑check dimensions: \(\mathbf{Q},\mathbf{K},\mathbf{V}\) must share the same head dimension \(d_k\).  
+- **Outlook** – Ongoing research is pushing beyond quadratic attention, integrating retrieval, and unifying modalities. Mastering the mathematics presented here remains the foundation for any future innovation.  "
+2026-10-10,Fine-tuning vs prompt engineering: when to use which,../#2026-10-10-fine-tuning-vs-prompt-engineering-when-to-use-which.md,"# Fine‑Tuning vs. Prompt Engineering – When to Use Which  
+
+## Introduction  
+- **LLM boom** – Transformer‑based models now power chatbots, assistants, and analytics across industries.  
+- **Two adaptation strategies**  
+  1. **Fine‑tuning** – modify model weights on a task‑specific dataset.  
+  2. **Prompt engineering** – steer a frozen model with carefully crafted inputs.  
+- **Why the choice matters**  
+  - **Cost** – compute vs. pay‑per‑token.  
+  - **Latency** – raw inference speed vs. extra preprocessing.  
+  - **Maintainability** – versioned prompts vs. model checkpoints.  
+  - **Performance** – accuracy, hallucination control, determinism.  
+- **Scope** – This article explains the technical foundations of each approach, provides a decision matrix, shows hybrid workflows, and walks through three real‑world cases.  
+
+---  
+
+## 1. Foundations  
+
+### 1.1 Fine‑Tuning  
+- **Objective** – minimize a loss (e.g., cross‑entropy) on a labeled corpus while keeping the base architecture unchanged.  
+- **Data needs** – typically ≥ 1 k high‑quality examples; more data yields diminishing returns after a few epochs.  
+- **Variants**  
+  - **Full‑model** – back‑propagate through all parameters (expensive, high memory).  
+  - **Parameter‑efficient methods** – update only a small subset:  
+    - **LoRA** (Low‑Rank Adaptation) adds trainable rank‑r matrices to attention/value projections.  
+    - **Adapters** insert lightweight bottleneck layers between transformer blocks.  
+    - **Prefix‑tuning** learns a set of token embeddings that are prepended to every input.  
+
+```python
+# Minimal LoRA fine‑tuning with 🤗 Transformers + PEFT
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import LoraConfig, get_peft_model
+
+model_name = ""meta-llama/Meta-Llama-3-8B""
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(model_name)
+
+lora_cfg = LoraConfig(
+    r=8,                     # rank
+    lora_alpha=16,
+    target_modules=[""q_proj"", ""v_proj""],  # attention matrices
+    bias=""none"",
+    task_type=""CAUSAL_LM"",
+)
+
+model = get_peft_model(model, lora_cfg)
+# …train on your labeled dataset…
+```
+
+### 1.2 Prompt Engineering  
+- **Prompt design** – craft the textual (or multimodal) input that elicits the desired behavior.  
+  - **Zero‑shot** – a single instruction.  
+  - **Few‑shot** – embed 1–N exemplars in the prompt.  
+  - **Chain‑of‑thought** – ask the model to reason step‑by‑step.  
+  - **System messages** (ChatML, OpenAI) to set persona or constraints.  
+- **Control knobs** – temperature, top‑p, max tokens, function calling, or logits‑bias to bias specific tokens.  
+
+```python
+# Prompt‑engineering example (OpenAI Chat API)
+messages = [
+    {""role"": ""system"", ""content"": ""You are a helpful legal assistant.""},
+    {""role"": ""user"",   ""content"": ""Summarize the following NDA in plain English:\n\n[Insert NDA text]""},
+]
+
+response = client.chat.completions.create(
+    model=""gpt-4o-mini"",
+    messages=messages,
+    temperature=0.2,      # low randomness → deterministic summary
+    max_tokens=250,
+)
+
+print(response.choices[0].message.content)
+```
+
+---  
+
+## 2. Decision Matrix: When to Fine‑Tune  
+
+| Criterion | Why Fine‑Tuning Helps | Typical Signals |
+|-----------|----------------------|-----------------|
+| **Domain specificity** | Learns niche vocabularies, regulatory phrasing, and proprietary terminology. | High OOV rate; domain‑specific jargon. |
+| **Performance thresholds** | Achieves higher accuracy, lower hallucination, and deterministic outputs (especially with low temperature). | SLA requires > 95 % F1 or < 1 % hallucination. |
+| **Data availability** | Sufficient labeled examples (≥ 1 k) and permission to store them. | Curated QA pairs, annotated logs. |
+| **Operational constraints** | Offline deployment, strict latency (< 50 ms), or limited model size (edge devices). | Edge inference, on‑premise security policies. |
+| **Regulatory & privacy** | Model weights can be audited; data never leaves the secure environment. | HIPAA, GDPR‑restricted data. |
+
+> **Rule of thumb:** If two or more of the above criteria apply, start with a lightweight fine‑tune (e.g., LoRA) before moving to heavier options.  
+
+---  
+
+## 3. Decision Matrix: When to Rely on Prompt Engineering  
+
+| Criterion | Why Prompting Suffices | Typical Signals |
+|-----------|-----------------------|-----------------|
+| **Rapid prototyping** | Instant iteration, no GPU cycles, easy A/B testing. | Idea stage, product demo. |
+| **Resource constraints** | Pay‑per‑token pricing is cheaper than compute‑intensive fine‑tuning. | Small startup budget, serverless inference. |
+| **Dynamic or multi‑task scenarios** | Switch contexts on the fly by swapping prompt templates. | Unified assistant handling support, sales, and docs. |
+| **Regulatory & compliance** | Prompt logic is fully auditable; no hidden weight changes. | Need to show exact decision path to auditors. |
+| **Low‑data regime** | No labeled set available; rely on the model’s pre‑training knowledge. | New language or emerging topic. |
+
+> **Rule of thumb:** If you need speed, flexibility, or have minimal data, start with prompt engineering and revisit fine‑tuning only if performance plateaus.  
+
+---  
+
+## 4. Hybrid Strategies & Best‑Practice Workflow  
+
+1. **Baseline prompt** – measure accuracy, latency, and cost.  
+2. **If metrics miss targets**, apply a lightweight fine‑tune (LoRA/Adapter) on a task‑specific subset while keeping the original prompt template.  
+3. **Version everything**  
+   - Prompt templates in a Git repo (e.g., `prompts/v1_customer_support.md`).  
+   - Model checkpoints with semantic versioning (`llama3‑8b‑v0.3‑lora`).  
+4. **Monitor drift** – run periodic evaluation on a hold‑out set; trigger re‑fine‑tune or prompt revision when degradation > 5 %.  
+5. **Tooling ecosystem**  
+   - **LangChain** / **LlamaIndex** for prompt templating, retrieval, and chaining.  
+   - **PEFT**, **AdapterHub** for parameter‑efficient fine‑tuning.  
+   - **MLOps** (MLflow, DVC) to track experiments, artifacts, and rollout pipelines.  
+
+### Workflow Diagram (textual)
+
+```
+[Prompt Design] → [Eval] → (Pass) → Deploy
+                ↓
+          (Fail) → [Lightweight FT] → [Re‑Eval] → Deploy
+```
+
+---  
+
+## 5. Real‑World Case Studies  
+
+### Case A – Customer‑Support Chatbot  
+- **Goal**: Answer FAQs across multiple product lines.  
+- **Prompt‑only**: System message + few‑shot examples → 90 % satisfaction, but latency spiked under load.  
+- **Fine‑tune attempt**: Full‑model fine‑tune on 5 k tickets → +2 % accuracy, 3× higher GPU cost.  
+- **Outcome**: Adopted **prompt engineering + retrieval‑augmented generation (RAG)** to keep latency low; fine‑tuning was abandoned.  
+
+### Case B – Legal‑Document Summarizer  
+- **Goal**: Produce concise, liability‑safe summaries of NDAs.  
+- **Data**: 12 k expert‑annotated NDA‑summary pairs (confidential).  
+- **Fine‑tune**: LoRA on Llama‑3‑8B → 96 % ROUGE‑L, hallucination < 0.5 %.  
+- **Prompt‑only**: Chain‑of‑thought with the same model stuck at 78 % ROUGE‑L and occasional omitted clauses.  
+- **Outcome**: **Fine‑tuning** was mandatory because of regulatory risk and strict performance SLAs.  
+
+### Case C – Marketing‑Copy Generator  
+- **Goal**: Generate tagline variants for ad campaigns.  
+- **Constraints**: Creative team needs instant iteration; budget limited.  
+- **Prompt engineering**: Few‑shot with style tags (“playful”, “formal”) + temperature = 0.7 → > 30 variants in < 1 s, live A/B tested.  
+- **Fine‑tune**: Trained on 500 examples → no measurable lift, added 2 h of GPU time.  
+- **Outcome**: **Prompt‑only** solution kept workflow agile and cost‑effective.  
+
+---  
+
+## Conclusion  
+
+- **Key criteria** for picking an approach are domain specificity, performance targets, data availability, operational limits, and compliance needs.  
+- **Pragmatic process** – start with prompt engineering, measure, then add lightweight fine‑tuning only when metrics justify the extra compute and maintenance overhead.  
+- **Future outlook** – Retrieval‑augmented generation, model‑editing (e.g., MEMIT), and on‑the‑fly weight injection will further blur the line between “prompt” and “fine‑tune”.  
+- **Call to action** – Choose a pilot use case, define quantitative success metrics, apply the matrices above, and iterate. The right balance between prompts and fine‑tunes will unlock the best ROI from your LLM investments."
+2026-10-10,Common failure modes of LLM agents and how to fix them,../#2026-10-10-common-failure-modes-of-llm-agents-and-how-to-fix-them.md,"## Common Failure Modes of LLM Agents and How to Fix Them  
+
+---  
+
+### 1. Introduction  
+
+Large Language Model (LLM) agents are autonomous—or semi‑autonomous—software components that receive a natural‑language prompt, perform reasoning (often over external tools or data), and return a response. Typical use‑cases include:
+
+- Conversational assistants  
+- Code‑generation copilots  
+- Retrieval‑augmented question answering  
+- Automated workflow orchestration (e.g., ticket triage)  
+
+Reliability isn’t a nice‑to‑have feature; it directly influences user trust, safety compliance, and the bottom line. A single hallucinated fact or a missed constraint can cause misinformation, legal exposure, or lost revenue.  
+
+**Goal of this post** – enumerate the most common failure modes observed in production LLM agents and provide concrete, implementable mitigation strategies.  
+
+---  
+
+### 2. Failure Mode #1 – Hallucination & Fabricated Information  
+
+#### What it looks like  
+
+- “The Eiffel Tower was built in **1885**” (invented date)  
+- Citations to non‑existent papers or URLs  
+
+#### Root causes  
+
+| Cause | Why it matters |
+|-------|----------------|
+| **Training‑data noise** | The model learns spurious correlations and treats them as facts. |
+| **Over‑confidence in decoding** | Greedy or high‑temperature sampling prefers plausible‑sounding tokens over “I don’t know”. |
+| **Lack of grounding** | The model never checks its output against an authoritative source. |
+
+#### Fixes  
+
+1. **Retrieval‑augmented generation (RAG) & grounding checks**  
+   - Retrieve relevant passages *before* generation and force the model to cite them.  
+   - After generation, run a verification step that cross‑checks any claim against the retrieved corpus.  
+
+2. **Post‑generation fact‑checking pipelines**  
+   - Call external APIs (e.g., Wolfram Alpha, Crossref) or an internal knowledge‑base to validate named entities, dates, or numbers.  
+   - If verification fails, either regenerate with an explicit “please cite sources” instruction or return a fallback message.  
+
+3. **Prompt‑engineering tricks**  
+   - Prefix: `You are a factual assistant. Only answer if you are 100 % certain; otherwise say ""I don't know.""`  
+   - Add a “self‑critique” instruction: `After you answer, briefly list any assumptions you made.`  
+
+#### Code snippet – Simple RAG loop (Python + LangChain)
+
+```python
+from langchain.llms import OpenAI
+from langchain.vectorstores import FAISS
+from langchain.prompts import PromptTemplate
+
+# 1️⃣ Load a vector store that contains domain documents
+vector_store = FAISS.load_local(
+    ""faiss_index"", embedding_function=""text-embedding-ada-002""
+)
+
+# 2️⃣ Retrieve the top‑k most similar chunks
+def retrieve(query: str, k: int = 5) -> str:
+    docs = vector_store.similarity_search(query, k=k)
+    return ""\n"".join(doc.page_content for doc in docs)
+
+# 3️⃣ Prompt that forces grounding
+template = """"""You are a factual assistant. Use **only** the following excerpts to answer the question.
+If you cannot answer with certainty, say ""I don't know.""
+
+Excerpts:
+{context}
+
+Question: {question}
+Answer:""""""
+prompt = PromptTemplate.from_template(template)
+
+def answer(question: str) -> str:
+    context = retrieve(question)
+    llm = OpenAI(temperature=0)          # deterministic for factual QA
+    return llm(prompt.format(context=context, question=question))
+
+print(answer(""When was the first iPhone released?""))
+```
+
+*Key points*: deterministic decoding (`temperature=0`), explicit grounding, and a fallback response.  
+
+---  
+
+### 3. Failure Mode #2 – Prompt Sensitivity & Inconsistent Outputs  
+
+#### Symptom  
+
+Re‑phrasing a request—e.g., “What are the risks?” → “List the risks.”—yields completely different enumerations.  
+
+#### Why it happens  
+
+- Token‑level stochasticity (temperature, top‑p) amplifies tiny wording changes.  
+- The model does not maintain a persistent reasoning chain across calls.  
+
+#### Fixes  
+
+| Fix | How to apply |
+|-----|--------------|
+| **Chain‑of‑thought (CoT) prompting** | Ask the model to “think step‑by‑step” before answering. |
+| **Self‑consistency sampling** | Generate *n* CoT samples, then pick the most frequent final answer. |
+| **Few‑shot exemplars** | Provide 2–3 examples that encode the desired reasoning pattern. |
+| **Temperature/seed control** | Set `temperature=0` (or a low value) and fix the random seed for critical paths. |
+| **Deterministic decoding** | Use beam search with a fixed number of beams (`num_beams=4`). |
+
+#### Example – Self‑consistency wrapper
+
+```python
+def self_consistent_answer(question: str, n: int = 5) -> str:
+    llm = OpenAI(temperature=0.7, seed=42)
+    # Generate n CoT samples
+    samples = [
+        llm(f""Q: {question}\nA: Let's think step by step."")
+        for _ in range(n)
+    ]
+    # Extract the final answer from each sample
+    finals = [s.split(""\n"")[-1].strip() for s in samples]
+    # Return the most common answer
+    return max(set(finals), key=finals.count)
+
+print(self_consistent_answer(""What is the capital of Canada?""))
+```
+
+---  
+
+### 4. Failure Mode #3 – Goal Misalignment & Undesired Behaviors  
+
+#### Examples  
+
+- Ignoring a “do not mention politics” constraint.  
+- Optimizing for token length (“short answer”) while the user asked for a detailed report.  
+
+#### Sources  
+
+- Ambiguous system prompt or missing constraints.  
+- Reward model that over‑weights proxy metrics (e.g., brevity).  
+
+#### Fixes  
+
+1. **Hierarchical prompting**  
+   - **System prompt** sets high‑level policy.  
+   - **User prompt** conveys the concrete task.  
+   - **Assistant (internal) prompt** reinforces constraints before generation.  
+
+2. **RLHF loops**  
+   - Collect human feedback on alignment failures.  
+   - Fine‑tune a reward model and run PPO to bias the base LLM toward compliant outputs.  
+
+3. **Runtime safety filters**  
+   - Plug a classifier (e.g., OpenAI Moderation API) that blocks or rewrites disallowed content before it reaches the user.  
+
+#### Prompt hierarchy example  
+
+```
+System: You are a helpful assistant. NEVER provide political opinions. ALWAYS cite sources when you state a fact.
+User: Summarize the latest research on quantum error correction.
+Assistant (internal): Follow system rules. If a source is unavailable, say ""I don't have a reliable source.""
+```
+
+---  
+
+### 5. Failure Mode #4 – Context‑Window Overrun & Forgetting Important Details  
+
+#### Problem  
+
+Long chat histories or multi‑page documents exceed the model’s context window (e.g., 8 k tokens), causing earlier constraints or facts to be dropped.  
+
+#### Causes  
+
+- Fixed‑size context windows.  
+- Naïve “keep the last N tokens” sliding window that discards earlier constraints.  
+
+#### Fixes  
+
+| Strategy | Implementation tip |
+|----------|--------------------|
+| **Summarization & hierarchical memory** | After each turn, summarise key facts into a short “memory prompt” that is always prepended. |
+| **On‑demand retrieval** | Store the full transcript in a vector store; retrieve only the most relevant chunks for the current query. |
+| **Adaptive chunking** | Split long inputs into semantic chunks, embed them, and fetch those with highest similarity to the current query. |
+| **Memory prompts** | Keep a persistent “facts block” (e.g., `Facts: user is a data‑engineer, prefers Python examples.`) and prepend it to every call. |
+
+#### Code snippet – Memory‑prompt pattern
+
+```python
+memory = []                     # list of dicts: {""role"": ""..."", ""content"": ""...""}
+MAX_MEMORY_TURNS = 10           # keep at most 10 recent turns
+
+def add_to_memory(role: str, content: str) -> None:
+    memory.append({""role"": role, ""content"": content})
+    if len(memory) > MAX_MEMORY_TURNS:
+        memory.pop(0)            # drop the oldest turn
+
+def retrieve(query: str) -> str:
+    """"""Placeholder for a RAG or vector‑store lookup.""""""
+    # In practice, query a FAISS/Chroma index here.
+    return """"
+
+def chat(user_msg: str) -> str:
+    # 1️⃣ Retrieve relevant external context (optional)
+    external_context = retrieve(user_msg)
+
+    # 2️⃣ Build the prompt
+    prompt = [
+        {""role"": ""system"", ""content"": ""You are a factual assistant. Never hallucinate.""},
+        *memory,
+        {""role"": ""user"", ""content"": f""{external_context}\n\nQuestion: {user_msg}""}
+    ]
+
+    # 3️⃣ Call the LLM
+    response = OpenAIChat().chat_completion(prompt).choices[0].message[""content""]
+
+    # 4️⃣ Update memory
+    add_to_memory(""assistant"", response)
+    return response
+```
+
+---  
+
+### 6. (Optional) Failure Mode #5 – Resource Exhaustion & Latency Spikes  
+
+#### Symptoms  
+
+- API timeouts during peak load.  
+- Unexpected cost spikes in production.  
+
+#### Contributors  
+
+- Using the largest available model for every request.  
+- Re‑generating the same answer for identical queries.  
+- Serial processing of independent requests.  
+
+#### Fixes  
+
+1. **Model distillation / quantisation**  
+   - Deploy a 3‑bit (or 4‑bit) quantised version for low‑latency paths; fall back to the full‑size model only for complex tasks.  
+
+2. **Caching & token‑level memoisation**  
+   - Cache embeddings and LLM outputs keyed by a hash of the normalised prompt.  
+   - Re‑use the same completion for identical queries within a short TTL.  
+
+3. **Asynchronous pipelines & load‑balancing**  
+   - Use a task queue (e.g., Celery, RabbitMQ) to batch similar requests.  
+   - Autoscale model workers based on latency metrics.  
+
+#### Cache example (Python + Redis)
+
+```python
+import hashlib, json, redis
+from openai import ChatCompletion
+
+redis_client = redis.Redis(host=""localhost"", port=6379, db=0)
+
+def cached_chat(messages: list[dict]) -> str:
+    # Create a deterministic key from the message list
+    key = hashlib.sha256(json.dumps(messages, sort_keys=True).encode()).hexdigest()
+    cached = redis_client.get(key)
+    if cached:
+        return cached.decode()
+
+    resp = ChatCompletion.create(model=""gpt-4o-mini"", messages=messages)
+    answer = resp.choices[0].message[""content""]
+    redis_client.setex(key, 300, answer)   # 5‑minute TTL
+    return answer
+```
+
+---  
+
+### 7. Conclusion  
+
+| Failure Mode | Core Remedy |
+|--------------|--------------|
+| Hallucination | Retrieval‑augmented generation + grounding + post‑generation fact‑checking |
+| Prompt Sensitivity | Chain‑of‑thought, self‑consistency, deterministic decoding |
+| Goal Misalignment | Hierarchical prompts, RLHF, runtime safety filters |
+| Context Overrun | Summarisation, hierarchical memory, on‑demand retrieval |
+| Resource Exhaustion (optional) | Distilled/quantised models, caching, asynchronous load‑balancing |
+
+A **defence‑in‑depth** approach works best: start with robust prompt design, layer architectural safeguards (retrieval, memory, safety filters), and finish with continuous monitoring + human‑in‑the‑loop feedback.  
+
+**Call to action** – audit the agents you own today: identify which of the above modes appear, apply the corresponding fixes, and share your findings with the community. A collective effort will raise the reliability bar for every LLM‑powered product.  "
+2026-10-09,Vector databases and how similarity search works,../#2026-10-09-vector-databases-and-how-similarity-search-works.md,"# Vector Databases and How Similarity Search Works  
+
+## Introduction  
+- **Why now?** The volume of unstructured data—text, images, audio, and the embeddings derived from them—has exploded, outpacing traditional relational storage and search solutions.  
+- **What is a vector?** A numeric array (typically 128 – 1 024 dimensions) that captures the semantic information of an entity. Efficiently storing and searching these vectors is the core challenge.  
+- **Similarity search in a nutshell:** Given a query vector, retrieve the most *similar* vectors from a large collection using a distance or similarity metric. This powers semantic search, recommendation, anomaly detection, and more.  
+- **What you’ll learn**  
+  1. How embeddings are created and which properties matter.  
+  2. Exact vs. approximate nearest‑neighbor (ANN) search and the indexing structures behind them.  
+  3. The architecture of a vector database and its integration points.  
+  4. A hands‑on workflow to build a semantic‑search service.  
+  5. How to evaluate, tune, and maintain a production‑grade vector‑search system.  
+
+---  
+
+## 1. Foundations of Vector Representations  
+
+### Definition  
+A **high‑dimensional vector (embedding)** is a dense, fixed‑size numeric representation of an object (word, sentence, image, etc.) produced by a neural model.  
+
+### Common Sources  
+
+| Modality | Model family | Typical dimension |
+|----------|--------------|-------------------|
+| Text     | Word2Vec, GloVe, FastText, BERT, Sentence‑Transformers | 100 – 1 024 |
+| Image    | ResNet, CLIP, EfficientNet | 256 – 1 024 |
+| Audio    | wav2vec 2.0, HuBERT | 128 – 768 |
+| Multimodal| CLIP, ALIGN, FLAVA | 512 – 1 024 |
+
+### Properties that Matter for Search  
+- **Magnitude** – Often normalized to unit length for cosine similarity.  
+- **Direction** – Encodes semantic orientation; small angular differences imply high similarity.  
+- **Sparsity** – Modern embeddings are dense; sparse vectors require different indexing strategies.  
+- **Distribution** – Clustering tendencies affect index balance and recall.  
+
+### Distance vs. Similarity Metrics  
+
+| Metric | Formula | Typical use |
+|--------|---------|-------------|
+| Euclidean (L₂) | \\(\\sqrt{\\sum_i (x_i-y_i)^2}\\) | Geometric proximity when vectors are not normalized. |
+| Cosine similarity | \\(\\frac{x\\cdot y}{\\|x\\|\\|y\\|}\\) | Most common for normalized embeddings. |
+| Manhattan (L₁) | \\(\\sum_i |x_i-y_i|\\) | Robust to outliers; sometimes used in sparse spaces. |
+| Inner product | \\(x\\cdot y\\) | Equivalent to cosine on unit‑norm vectors; favored by some ANN libraries for speed. |
+
+---  
+
+## 2. Core Concepts of Similarity Search  
+
+### Exact vs. Approximate NN  
+- **Exact NN** scans every vector (brute‑force). It guarantees 100 % recall but scales as \\(O(N\\cdot d)\\) per query.  
+- **Approximate NN (ANN)** sacrifices a small amount of recall for orders‑of‑magnitude speedups, using specialized indexes.  
+
+### Curse of Dimensionality  
+As dimensionality \\(d\\) grows, the volume of the space expands exponentially, making tree‑based partitions ineffective. This forces us to rely on probabilistic or graph‑based methods.  
+
+### Indexing Structures  
+
+| Family | Example | Core idea | Typical complexity |
+|--------|---------|-----------|--------------------|
+| Tree‑based | KD‑Tree, Ball Tree | Recursive space partitioning | Build \\(O(N\\log N)\\), query \\(O(\\log N)\\) (degrades > 20 d) |
+| Hash‑based | Locality Sensitive Hashing (LSH) | Random projections map similar vectors to the same buckets | Sub‑linear query, high memory |
+| Graph‑based | HNSW, NSW, ANNOY | Construct a navigable small‑world graph; greedy search hops to progressively closer nodes | Build \\(O(N\\log N)\\), query \\(O(\\log N)\\) with high recall |
+
+### Trade‑offs  
+
+| Index | Recall | Latency | Memory | Build time |
+|-------|--------|---------|--------|------------|
+| KD‑Tree | High (low d) | Low | Low | Fast |
+| LSH | Medium | Medium | High | Medium |
+| HNSW | > 95 % (tunable) | < 10 ms for million‑scale | Medium‑High | Moderate‑High |
+
+---  
+
+## 3. Architecture of Vector Databases  
+
+### How They Differ from Traditional Stores  
+- **Hybrid storage:** A vector index (in‑memory or on‑disk) is coupled with a document store for metadata.  
+- **Optimized I/O:** Block‑aligned layouts, product quantization, or IVF (inverted file) structures minimize disk reads.  
+- **Search‑first API:** The primary query pattern is “vector + optional scalar filters”.  
+
+### Key Components  
+
+1. **Ingestion pipeline**  
+   - *Embedding generation*: model inference (CPU/GPU) → batch or streaming.  
+   - *Loader*: bulk import (CSV, Parquet) or real‑time upserts via REST/gRPC.  
+
+2. **Index management**  
+   - Create, drop, or rebuild indexes per collection.  
+   - Support dynamic updates (insert, delete, modify) with background re‑balancing.  
+
+3. **Query engine**  
+   - Executes ANN search, merges results with scalar predicates (e.g., `category='news'`).  
+   - Returns IDs, distances, and optionally the original payload.  
+
+4. **Persistence layer**  
+   - Write‑ahead log + snapshot files (e.g., Milvus `binlog` + `meta`).  
+   - Compression: product quantization (PQ), optimized PQ (OPQ), or simple float16.  
+
+### Integration Points  
+
+- **APIs:** REST, gRPC, GraphQL, and language SDKs (Python, Java, Go, Node).  
+- **Hybrid queries:**  
+
+  ```sql
+  SELECT * FROM docs
+  WHERE vector_search(query_vec, top_k=5) AND author='Alice';
+  ```  
+
+- **Observability:** metrics (latency, QPS), health checks, index statistics.  
+
+---  
+
+## 4. Practical Workflow & Use Cases  
+
+### End‑to‑end Example: Semantic Text Search (Python + Qdrant)
+
+```python
+# 1️⃣ Install the SDKs
+!pip install -q qdrant-client sentence-transformers
+
+# 2️⃣ Load a transformer model
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# 3️⃣ Prepare documents
+docs = [
+    {""id"": 1, ""text"": ""How to train a neural network"", ""category"": ""ML""},
+    {""id"": 2, ""text"": ""Best practices for Docker containers"", ""category"": ""DevOps""},
+    # … more documents …
+]
+texts = [d[""text""] for d in docs]
+
+# 4️⃣ Generate embeddings (normalize for cosine similarity)
+vectors = model.encode(texts, batch_size=64, normalize_embeddings=True)
+
+# 5️⃣ Connect to Qdrant and create a collection
+from qdrant_client import QdrantClient
+client = QdrantClient("":memory:"")  # in‑process demo
+client.recreate_collection(
+    collection_name=""semantic_docs"",
+    vectors_config={""size"": vectors.shape[1], ""distance"": ""Cosine""},
+)
+
+# 6️⃣ Bulk upload vectors with metadata
+payload = [{""category"": d[""category""]} for d in docs]
+client.upload_collection(
+    collection_name=""semantic_docs"",
+    vectors=vectors,
+    payload=payload,
+    ids=[d[""id""] for d in docs],
+)
+
+# 7️⃣ Perform a hybrid search (vector + filter)
+query = ""Docker best practices""
+q_vec = model.encode([query], normalize_embeddings=True)[0]
+
+hits = client.search(
+    collection_name=""semantic_docs"",
+    query_vector=q_vec,
+    limit=3,
+    filter={""must"": [{""key"": ""category"", ""match"": {""value"": ""DevOps""}}]},
+)
+
+for hit in hits:
+    doc = docs[hit.id - 1]          # IDs are 1‑based in this example
+    print(f""ID:{hit.id}  Score:{hit.score:.4f}  Text:{doc['text']}"")
+```
+
+**What the code does**  
+1. Generates embeddings with a sentence‑transformer.  
+2. Creates a Qdrant collection that uses cosine distance.  
+3. Uploads vectors together with a `category` field.  
+4. Executes a hybrid query: ANN search filtered by `category = 'DevOps'`.  
+
+### Real‑World Scenarios  
+
+| Scenario | Vector source | Typical index | Example query |
+|----------|---------------|---------------|---------------|
+| Recommendation | User‑item interaction embeddings | HNSW | “Find the 10 items closest to user‑123’s vector.” |
+| Image similarity | CLIP image embeddings | IVF‑PQ + HNSW overlay | “Retrieve visually similar products.” |
+| Time‑series anomaly detection | Autoencoder latent vectors | LSH | “Find nearest normal patterns to the current window.” |
+| Retrieval‑Augmented Generation (RAG) | Passage embeddings (BERT) | HNSW | “Fetch top‑k relevant docs for an LLM prompt.” |
+
+### Scaling Tips  
+
+- **Sharding:** Split a collection by hash of the primary key or by semantic region (e.g., language).  
+- **Replication:** Use read‑only replicas for high QPS; the leader handles writes and index updates.  
+- **Hybrid search:** Push scalar filters to the DB so that candidate vectors are pruned before ANN.  
+- **Monitoring:** Track `recall@k`, 95th‑percentile latency, index‑build queue length, and storage utilization.  
+
+---  
+
+## 5. Evaluating and Optimizing Vector Search  
+
+### Core Metrics  
+
+| Metric | Meaning |
+|--------|---------|
+| **Recall@k** | Fraction of true nearest neighbors that appear in the top‑k results. |
+| **Precision@k** | Relevance of the returned items (important for recommendation). |
+| **Latency** | 95th‑percentile query time; interactive apps typically aim for < 10 ms. |
+| **Throughput** | Queries per second (QPS) under realistic load. |
+| **Cost** | RAM + SSD footprint plus compute required for indexing. |
+
+### Benchmarking  
+
+- **ANN‑Bench** – a standardized suite (SIFT, GIST, Deep1B) for comparing index families.  
+- **MS MARCO** – a text‑retrieval benchmark; useful for evaluating semantic‑search pipelines.  
+- Use the `benchmark.py` script shipped with most vector‑DB repositories or Faiss’s `bench_gpu` utility.  
+
+### Parameter Tuning  
+
+| Parameter | Effect | Typical range |
+|-----------|--------|---------------|
+| `M` (HNSW graph connectivity) | Higher → better recall, more RAM | 12 – 48 |
+| `efConstruction` | Build quality vs. time | 100 – 400 |
+| `efSearch` | Query recall vs. latency | 10 – 200 |
+| `n_trees` (ANNOY) | More trees → higher recall | 10 – 100 |
+| `nprobe` (IVF) | Number of inverted lists scanned per query | 1 – 64 |
+| **Distance metric** | Must match embedding normalization (cosine ↔ inner product) | — |
+| **Dimensionality reduction** | Saves memory; may reduce recall | PCA to 64‑256 d, OPQ for quantization |
+
+### Maintenance Practices  
+
+- **Re‑indexing:** Schedule during low‑traffic windows or use online incremental algorithms (HNSW supports inserts).  
+- **Embedding drift:** Periodically recompute embeddings for stale documents; consider versioned collections.  
+- **Hot‑cold tiers:** Keep frequently queried vectors in RAM; archive older vectors on SSD with a slower fallback index.  
+
+---  
+
+## Conclusion  
+
+- Vector databases turn raw embeddings into a searchable asset, enabling AI‑first applications that were impossible with classic keyword search.  
+- Similarity search hinges on selecting the right metric, index structure, and tuning parameters to meet the desired recall‑latency trade‑off.  
+- **Best practices:**  
+  1. Normalize embeddings.  
+  2. Start with an HNSW index (high recall, low latency).  
+  3. Continuously monitor `recall@k` and latency.  
+  4. Adjust `efSearch`, `M`, and quantization settings as data grows.  
+- **Future outlook:** Emerging algorithms (e.g., ScaNN, DiskANN), tighter LLM‑vector‑DB integration, and serverless vector‑search services will lower the barrier for developers even further.  
+
+**Call to action:** Choose an open‑source vector DB (Milvus, Qdrant, or Weaviate), run the code snippet above, experiment with `M` and `efSearch` settings, and share your findings with the community!"
+2026-10-09,Evaluating LLM applications in production,../#2026-10-09-evaluating-llm-applications-in-production.md,"# Evaluating LLM Applications in Production  
+
+## 1. Introduction  
+
+- **Context** – Large language models (LLMs) have moved from research demos to the core of customer‑support bots, content‑generation services, and enterprise search tools. Their ability to understand and generate natural language at scale makes them attractive for production workloads.  
+- **Why rigorous evaluation matters** – Deploying an LLM without systematic checks can produce toxic outputs, cause latency spikes, or violate regulations. Each failure erodes user trust, inflates operating costs, and may expose the organization to legal risk.  
+- **Scope & audience** – This article is written for ML engineers, product managers, and reliability teams responsible for taking an LLM from prototype to a live service. It focuses on metric definition, evaluation pipelines, observability, and real‑world lessons—nothing theoretical, everything actionable.  
+
+---
+
+## 2. Defining Success Metrics for Production LLMs  
+
+| Category | Metric | Typical Measurement | Notes |
+|----------|--------|---------------------|-------|
+| **Performance** | Accuracy / relevance | Exact‑match, ROUGE, BLEU, or task‑specific scores | Choose a metric that aligns with the downstream task (e.g., intent classification vs. free‑form generation). |
+| | Latency | 95th‑percentile response time (ms) | Critical for interactive UI; set SLOs per request type. |
+| | Throughput | Requests per second (RPS) per GPU/CPU | Guides autoscaling and cost budgeting. |
+| **Business** | Conversion rate | % of sessions that achieve the target action (e.g., ticket resolved) | Tie to A/B‑test variants. |
+| | Retention / churn | Change in user‑return rate after LLM rollout | Long‑term health indicator. |
+| | Cost‑per‑interaction | (Compute cost + API fees) / # of successful interactions | Enables ROI calculations. |
+| **Safety & Compliance** | Toxicity | % of outputs flagged by a profanity/hate‑speech detector | Must meet regulatory or brand guidelines. |
+| | Hallucination rate | % of factual statements that are incorrect (human‑verified) | Crucial for knowledge‑base or advice bots. |
+| | Bias score | Disparity in outcomes across protected attributes | Use fairness‑audit tools. |
+| | Data‑privacy leakage | Presence of PII in generated text (detected by regex/ML) | Must comply with GDPR, HIPAA, etc. |
+
+### Trade‑off considerations  
+
+- **Latency vs. quality** – Larger context windows improve relevance but increase inference time.  
+- **Cost vs. safety** – Adding a secondary “guardrail” model raises expense but reduces toxic‑output risk.  
+- **Prioritisation** – Rank metrics per product SLA (e.g., latency ≥ 200 ms, toxicity ≤ 0.1 %).  
+
+---
+
+## 3. Building a Robust Evaluation Framework  
+
+### 3.1 Data Collection & Test‑Set Construction  
+
+1. **In‑domain data** – Real user queries from logs, anonymised and cleaned.  
+2. **Out‑of‑domain data** – Synthetic prompts that probe edge cases (rare entities, ambiguous phrasing).  
+3. **Synthetic augmentation** – Use a smaller LLM to generate paraphrases, then filter with heuristics.  
+
+```python
+# Simple synthetic‑augmentation pipeline (Python)
+import random
+from transformers import pipeline
+
+generator = pipeline(""text2text-generation"", model=""google/flan-t5-base"")
+
+def augment(prompt: str, n: int = 5) -> list[str]:
+    aug = set()
+    for _ in range(n):
+        out = generator(f""Paraphrase: {prompt}"", max_new_tokens=32)[0][""generated_text""]
+        if out.strip().lower() != prompt.strip().lower():
+            aug.add(out.strip())
+    return list(aug)
+
+sample = ""How do I reset my password?""
+print(augment(sample))
+```
+
+### 3.2 Offline Evaluation Pipelines  
+
+- **Benchmark suites** – Combine standard NLP benchmarks (e.g., MMLU, TruthfulQA) with custom test sets.  
+- **Automated scoring** – Run the model on the test set, compute metrics, and store results as CI artifacts.  
+- **Versioned artifacts** – Tag each run with the model hash, data snapshot, and hyper‑parameters.  
+
+### 3.3 Online Evaluation Methods  
+
+| Method | Description | When to use |
+|--------|-------------|-------------|
+| **A/B testing** | Split live traffic (e.g., 5 % to candidate, 95 % to baseline) and compare business and safety metrics. | After offline validation, before full rollout. |
+| **Canary releases** | Gradually increase traffic to the new model while monitoring latency and error rates. | Early detection of performance regressions. |
+| **Shadow traffic** | Duplicate live requests to the candidate model without returning its response to users. | Safe way to collect quality signals at scale. |
+
+### 3.4 Human‑in‑the‑Loop Evaluation  
+
+- **Expert review** – Domain specialists rate a random sample of outputs on relevance, factuality, and tone.  
+- **User studies** – Deploy a limited beta and collect NPS or satisfaction surveys.  
+- **Annotation guidelines** – Provide a rubric (e.g., 0‑3 scale for toxicity) to ensure inter‑annotator consistency.  
+
+---
+
+## 4. Monitoring & Observability in Production  
+
+### 4.1 Real‑time Telemetry  
+
+- **Latency & error rates** – Export `request_latency_ms`, `http_status`, and `model_error` as Prometheus counters.  
+- **Resource utilisation** – Track GPU memory, CPU usage, and request‑queue depth via OpenTelemetry.  
+
+### 4.2 Quality Monitoring  
+
+- **Drift detection** – Periodically compute embedding similarity between recent queries and the training distribution; trigger alerts when cosine distance exceeds a threshold.  
+- **Anomaly alerts** – Auto‑flag spikes in toxicity or hallucination rates using moving‑average control charts.  
+- **Continuous scoring** – Run a lightweight “shadow evaluator” on a random 1 % of live traffic to compute online ROUGE or factuality scores.  
+
+### 4.3 Feedback Loops  
+
+1. **User‑generated signals** – Thumbs‑up/down, “Report issue” clicks.  
+2. **Active learning** – Prioritise flagged samples for human labelling and add them to the next training batch.  
+3. **Retraining triggers** – If latency exceeds the SLO for > 5 min **or** toxicity exceeds 0.2 % for two consecutive hours, enqueue a model rebuild.  
+
+### 4.4 Tooling Stack Example  
+
+```yaml
+# prometheus.yml (excerpt)
+scrape_configs:
+  - job_name: ""llm_service""
+    static_configs:
+      - targets: [""localhost:9090""]
+    metrics_path: ""/metrics""
+    relabel_configs:
+      - source_labels: [__name__]
+        regex: ""llm_.*""
+        action: keep
+```
+
+- **Prometheus** – Time‑series storage for latency, error, and custom quality metrics.  
+- **Grafana** – Dashboards visualising SLO compliance and safety heatmaps.  
+- **OpenTelemetry Collector** – Unified tracing for end‑to‑end request flow (frontend → API gateway → inference server).  
+- **LLM‑specific dashboards** – Plugins such as *LangChain‑Observability* or *LlamaIndex‑Metrics* provide per‑prompt analytics.  
+
+---
+
+## 5. Case Studies & Lessons Learned  
+
+### 5.1 Customer‑Support Chatbot  
+
+- **Goal** – Resolve tickets within 30 s while maintaining > 90 % answer correctness.  
+- **Approach** – Deployed a 7 B model behind a TensorRT‑optimised inference server. Implemented a two‑stage pipeline: fast retrieval‑augmented generation for common FAQs, fallback to full LLM for complex queries.  
+- **Outcome** – 95th‑percentile latency dropped from 450 ms (baseline) to 180 ms; correct‑resolution rate increased by 3 %.  
+- **Lesson** – Combining retrieval with generation satisfies both speed and accuracy requirements.  
+
+### 5.2 Content‑Generation Platform  
+
+- **Goal** – Generate marketing copy with < 0.5 % hallucination and < 0.1 % bias incidents.  
+- **Approach** – Fine‑tuned a domain‑specific model on verified product specs, then added a post‑generation fact‑checker (RAG over a knowledge graph). Ran nightly A/B tests measuring “fact‑check pass rate”.  
+- **Outcome** – Hallucination rate fell from 2.3 % to 0.4 % after integrating the fact‑checker; bias metrics stayed under the threshold.  
+- **Lesson** – A lightweight verification layer is more cost‑effective than scaling the base LLM.  
+
+### 5.3 Enterprise Knowledge‑Base Search  
+
+- **Goal** – Return relevant documents for internal queries containing proprietary terminology.  
+- **Approach** – Built a hybrid system: BM25 retrieval + cross‑encoder re‑ranking using a 3 B LLM. Curated a test set of 1 k domain‑specific queries with expert relevance judgments. Monitored drift by measuring query‑embedding distance weekly.  
+- **Outcome** – Mean reciprocal rank (MRR) improved from 0.62 to 0.78; drift alerts fired after a major product launch, prompting a quick fine‑tune.  
+- **Lesson** – Continuous drift monitoring is essential when the underlying corpus evolves.  
+
+#### Key Takeaways  
+
+- **Metric alignment** is the first gate: if latency SLOs aren’t met, no amount of accuracy will salvage the product.  
+- **Hybrid architectures** (retrieval + generation, guardrails) often deliver the best cost‑performance trade‑off.  
+- **Observability must be domain‑aware**; generic latency charts hide quality regressions.  
+- **Iterative loops**—offline tests → canary → A/B → monitoring → active learning—are the only sustainable path to reliability at scale.  
+
+---
+
+## 6. Conclusion  
+
+1. **Evaluation lifecycle** – Start with clear success metrics, construct representative offline test sets, validate online with controlled experiments, and cement everything with real‑time monitoring and feedback loops.  
+2. **Continuous, data‑driven iteration** is not optional; LLM behaviour drifts as data, usage patterns, and model updates evolve.  
+3. **Call to action** – Before you push an LLM to production, embed a systematic evaluation pipeline into your CI/CD workflow. Treat safety, latency, and business impact as first‑class citizens, and you’ll deliver trustworthy, cost‑effective AI services at scale.  "
+2026-10-10,Vector databases and how similarity search works,../#2026-10-10-vector-databases-and-how-similarity-search-works.md,"# Vector Databases and How Similarity Search Works  
+
+## Introduction  
+
+- **Why similarity search matters** – It powers recommendation engines, image/audio retrieval, semantic search, and anomaly detection.  
+- **Limits of relational databases** – Traditional indexes are built for equality or range predicates on low‑dimensional columns. High‑dimensional vectors explode index size and make distance calculations impractical.  
+- **What you’ll learn** – How raw data becomes embeddings, the math behind similarity, the main index families, scaling patterns, and production‑ready best practices.  
+
+---  
+
+## 1. Vector Representations: From Raw Data to Embeddings  
+
+### Definition  
+A *vector* (or *embedding*) is a fixed‑length array of floating‑point numbers that captures the semantic information of an object in a continuous space.  
+
+### Common Sources  
+
+| Modality | Typical Model(s)                | Output dimension |
+|----------|--------------------------------|-------------------|
+| Text     | BERT, GPT, Sentence‑Transformers | 256 – 1 024 |
+| Images   | CLIP, ResNet, ViT               | 512 – 1 024 |
+| Audio    | Wav2Vec, YAMNet                 | 128 – 512 |
+| Graphs   | GraphSAGE, Node2Vec             | 64 – 256 |
+
+### Dimensionality & Pre‑processing  
+
+| Step | Reason | Typical practice |
+|------|--------|------------------|
+| **Normalization** | Makes cosine similarity equal to inner‑product after L2‑norm | `vector = vector / np.linalg.norm(vector)` |
+| **Quantization** | Reduces storage and I/O cost | 8‑bit Product Quantization (PQ) or OPQ |
+| **Batch encoding** | Keeps GPU memory usage stable | Encode in chunks (e.g., 1 000 vectors per batch) |
+
+---  
+
+## 2. Fundamentals of Similarity Search  
+
+### Distance Metrics  
+
+| Metric | Formula (vectors **a**, **b**) | Typical use |
+|--------|--------------------------------|-------------|
+| Euclidean (L2) | \\( \|a-b\|_2 = \sqrt{\sum_i (a_i-b_i)^2} \\) | General‑purpose, metric‑space indexes |
+| Cosine | \\( 1 - \frac{a\cdot b}{\|a\|_2 \|b\|_2} \\) | Text & multimodal embeddings (after L2‑norm) |
+| Manhattan (L1) | \\( \|a-b\|_1 = \sum_i |a_i-b_i| \\) | Sparse vectors |
+| Inner product (IP) | \\( -a\cdot b \\) (minimised) | Max‑inner‑product search (MIPS) |
+
+### Exact vs. Approximate Nearest Neighbour (ANN)  
+
+| Approach | Guarantee | Complexity | When to use |
+|----------|-----------|------------|-------------|
+| **Exact** (brute‑force) | 100 % recall | \\(O(N \cdot d)\\) per query | Small datasets (< 10⁶ vectors) or when absolute correctness is required |
+| **ANN** | High but not perfect recall | Sub‑linear (often < 1 ms for billions of vectors) | Production workloads where latency outweighs a few missed neighbors |
+
+### Query Workflow  
+
+1. **Encode** the query item → vector **q**.  
+2. **Search** the index using the chosen metric.  
+3. **Rank** the top‑k candidates and return their identifiers (and optionally distances).  
+
+---  
+
+## 3. Vector Database Architectures  
+
+| Architecture | Core idea | Strengths | Weaknesses |
+|--------------|-----------|-----------|------------|
+| **Flat (brute‑force)** | Store raw vectors; linear scan on each query. | Simple; 100 % recall. | Latency grows linearly; impractical beyond ~10⁶ vectors. |
+| **Partitioned (IVF, PQ, OPQ)** | Coarse quantizer creates inverted lists; optional product quantization compresses vectors. | Scales to billions; tunable recall‑latency trade‑off. | Requires training data; recall depends on `nprobe`. |
+| **Graph‑based (HNSW, NSG)** | Constructs a small‑world proximity graph; greedy search follows neighbor links. | Very high recall at low latency; cheap dynamic updates. | Higher memory overhead; index build can be expensive. |
+| **Hybrid / Cloud‑native** | Combines several structures, adds metadata filtering, autoscaling, and managed APIs. | Operational simplicity; SLA guarantees. | Vendor lock‑in; limited low‑level tuning. |
+
+**Examples** – Pinecone (managed HNSW + IVF), Milvus (supports IVF, PQ, HNSW), Weaviate (graph + metadata).  
+
+---  
+
+## 4. Indexing, Querying, and Scaling  
+
+### Building an Index (Milvus + HNSW example)
+
+```python
+# Milvus Python SDK – create a collection and HNSW index
+from pymilvus import Collection, FieldSchema, CollectionSchema, DataType
+
+# 1️⃣ Define the schema
+vectors = FieldSchema(name=""embedding"",
+                      dtype=DataType.FLOAT_VECTOR,
+                      dim=768)
+ids     = FieldSchema(name=""pk"",
+                      dtype=DataType.INT64,
+                      is_primary=True,
+                      auto_id=True)
+schema = CollectionSchema(fields=[ids, vectors],
+                          description=""Image embeddings"")
+
+# 2️⃣ Create the collection
+collection = Collection(name=""imgs"", schema=schema)
+
+# 3️⃣ Insert data (list of vectors)
+#   `vecs` is a list/np.ndarray of shape (N, 768)
+collection.insert([list(range(len(vecs))), vecs])
+
+# 4️⃣ Build an HNSW index
+index_params = {
+    ""metric_type"": ""IP"",          # inner product (max‑IP)
+    ""index_type"": ""HNSW"",
+    ""params"": {""M"": 16, ""efConstruction"": 200}
+}
+collection.create_index(field_name=""embedding"", index_params=index_params)
+```
+
+| Step | Note |
+|------|------|
+| **Training** | IVF/PQ need a representative sample; HNSW does not. |
+| **Parameter tuning** | `nlist`/`nprobe` for IVF; `M`, `efConstruction`, `ef` for HNSW. |
+| **Re‑indexing** | Required when dimensionality changes or after massive data churn. |
+
+### Query Execution Pipeline  
+
+1. **Encode** the query → vector **q**.  
+2. **Set search parameters** (`nprobe` for IVF, `ef` for HNSW).  
+3. **Execute** the search → obtain candidate IDs + distances.  
+4. **Post‑process** (optional) – re‑rank with a more expensive metric or apply business logic.  
+
+#### Recall vs. latency  
+
+| Parameter | Effect on recall | Effect on latency |
+|-----------|------------------|-------------------|
+| Increase `nprobe` / `ef` | ↑ recall | ↑ latency |
+| Decrease `nprobe` / `ef` | ↓ recall | ↓ latency |
+
+### Distributed Deployment Patterns  
+
+| Pattern | Description | Ideal scenario |
+|---------|-------------|----------------|
+| **Sharding by vector ID** | Split the collection across nodes; each shard holds a disjoint subset of vectors. | Datasets > 10⁹ vectors. |
+| **Replica sets** | Duplicate shards for read‑scaling and fault tolerance. | Low‑latency SLA, high QPS. |
+| **Load balancer + query router** | Front‑end routes a query to relevant shards, merges partial results, and returns the final top‑k. | Multi‑region deployments, geo‑distribution. |
+
+### Monitoring & Metrics  
+
+- **Throughput & latency** – QPS, p99/p95 latency.  
+- **Recall** – Sample queries compared against a brute‑force baseline.  
+- **Resource usage** – Memory/disk (raw vectors + index overhead), CPU/GPU utilization (especially for on‑the‑fly encoding).  
+- **Health alerts** – Trigger on latency spikes, recall drops after bulk updates, or storage saturation.  
+
+---  
+
+## 5. Real‑World Applications & Best Practices  
+
+### Typical Use Cases  
+
+| Domain | Example |
+|--------|---------|
+| **Semantic search** | Retrieve documents that match the *meaning* of a query. |
+| **Recommendation** | Find nearest‑neighbor items or users in embedding space. |
+| **Anomaly detection** | Flag vectors whose similarity to any “normal” vector falls below a threshold. |
+| **Multimedia retrieval** | Image‑to‑image, audio‑to‑audio, or cross‑modal (text ↔ image) search. |
+
+### Data Hygiene  
+
+- **Embedding drift** – Retrain the upstream model periodically, then re‑encode and re‑index.  
+- **Updates** – Prefer upserts when supported; otherwise perform delete‑then‑insert.  
+- **TTL / expiration** – Schedule background jobs to purge stale vectors (e.g., session embeddings).  
+
+### Security & Privacy  
+
+| Concern | Mitigation |
+|---------|------------|
+| **At‑rest encryption** | Enable DB‑level encryption or encrypt vectors client‑side before ingestion. |
+| **Access control** | Role‑based policies per collection; isolate tenant data in multi‑tenant SaaS. |
+| **Differential privacy** | Add calibrated noise to embeddings when regulatory privacy guarantees are needed. |
+
+### Choosing & Tuning a Vector DB  
+
+| Decision factor | Recommendation |
+|-----------------|----------------|
+| **Dataset size** | < 10 M → flat or HNSW; ≥ 10 M → IVF‑PQ or a managed service. |
+| **Latency SLA** | Sub‑10 ms → HNSW with high `ef`; 50‑100 ms → IVF with moderate `nprobe`. |
+| **Update frequency** | Frequent upserts → HNSW; bulk loads → IVF. |
+| **Budget** | Open‑source (Milvus, FAISS) on self‑hosted infra; managed (Pinecone, Weaviate Cloud) for ops‑free deployments. |
+
+**Production tip** – Start with a modest IVF index (`nlist=1024`). Benchmark recall at `nprobe=10`. Then iteratively increase `nlist` and `nprobe` until latency meets your target.  
+
+---  
+
+## Conclusion  
+
+- **Key takeaways** – Vectors turn unstructured data into searchable numeric representations; similarity is measured with distance metrics; vector databases provide specialised indexes (IVF, PQ, HNSW) that make ANN feasible at scale.  
+- **When to adopt** – Use a vector DB whenever you need fast, high‑dimensional similarity queries that relational indexes cannot support, especially for semantic or multimodal workloads.  
+- **Future trends** – Unified multimodal embeddings, on‑device (edge) vector search, and tighter integration of large language models (LLMs) with vector stores.  
+
+**Call to action** – Spin up a free Milvus (or any open‑source vector DB) instance, ingest a small text corpus, and run a semantic‑search query. Experiment with index parameters to observe the recall‑vs‑latency trade‑off in practice. Happy searching!"
