@@ -1,20 +1,28 @@
 :root {
   --bg: #fafafa;
+  --card: #ffffff;
   --text: #1f2328;
   --muted: #6b7280;
   --accent: #4f46e5;
+  --accent-2: #06b6d4;
   --code-bg: #eef0f4;
   --border: #e5e7eb;
+  --glow: rgba(79, 70, 229, 0.12);
+  --shadow: 0 10px 28px rgba(79, 70, 229, 0.15);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0f1115;
+    --card: #161922;
     --text: #e6e8eb;
     --muted: #9aa3af;
     --accent: #8b93ff;
+    --accent-2: #22d3ee;
     --code-bg: #1a1d24;
     --border: #2a2f3a;
+    --glow: rgba(139, 147, 255, 0.14);
+    --shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -22,9 +30,21 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(50rem 28rem at 12% -8%, var(--glow), transparent),
+    radial-gradient(40rem 24rem at 95% 0%, var(--glow), transparent),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   line-height: 1.7;
@@ -38,22 +58,30 @@ main {
 }
 
 header {
+  padding-top: 2.5rem;
   border-bottom: 1px solid var(--border);
 }
 
 header h1 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 2.2rem;
+  letter-spacing: -0.02em;
 }
 
 header h1 a {
-  color: var(--text);
   text-decoration: none;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent));
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 6s linear infinite;
 }
 
 header p {
-  margin: 0.25rem 0 0;
+  margin: 0.4rem 0 0;
   color: var(--muted);
+  animation: fadeUp 0.7s ease both;
 }
 
 a {
@@ -63,25 +91,54 @@ a {
 #list {
   list-style: none;
   padding: 0;
+  margin: 1.5rem 0 0;
 }
 
 #list li {
-  padding: 0.9rem 0;
-  border-bottom: 1px solid var(--border);
+  position: relative;
+  margin-bottom: 1rem;
+  padding: 1.1rem 1.25rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  opacity: 0;
+  animation: fadeUp 0.55s ease forwards;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+#list li:nth-child(1) { animation-delay: 0.05s; }
+#list li:nth-child(2) { animation-delay: 0.12s; }
+#list li:nth-child(3) { animation-delay: 0.19s; }
+#list li:nth-child(4) { animation-delay: 0.26s; }
+#list li:nth-child(5) { animation-delay: 0.33s; }
+#list li:nth-child(n + 6) { animation-delay: 0.4s; }
+
+#list li:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow);
+  border-color: var(--accent);
 }
 
 #list a {
-  font-weight: 600;
+  color: var(--text);
+  font-weight: 650;
   font-size: 1.1rem;
   text-decoration: none;
 }
 
-#list a:hover {
-  text-decoration: underline;
+#list a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+#list li:hover a {
+  color: var(--accent);
 }
 
 #list time {
   display: block;
+  margin-top: 0.25rem;
   color: var(--muted);
   font-size: 0.85rem;
 }
@@ -89,6 +146,17 @@ a {
 #back {
   display: inline-block;
   margin-bottom: 1rem;
+  text-decoration: none;
+  font-weight: 600;
+  transition: transform 0.2s ease;
+}
+
+#back:hover {
+  transform: translateX(-5px);
+}
+
+#article:not([hidden]) {
+  animation: fadeUp 0.5s ease both;
 }
 
 article h1,
@@ -98,6 +166,18 @@ article h3 {
   margin-top: 2rem;
 }
 
+article h2 {
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+
+article blockquote {
+  margin: 1rem 0;
+  padding: 0.2rem 1rem;
+  border-left: 4px solid var(--accent);
+  color: var(--muted);
+}
+
 article img {
   max-width: 100%;
 }
@@ -105,7 +185,8 @@ article img {
 article pre {
   background: var(--code-bg);
   padding: 1rem;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
   overflow-x: auto;
 }
 
@@ -132,4 +213,33 @@ article td {
   border: 1px solid var(--border);
   padding: 0.4rem 0.7rem;
 }
-[hidden] { display: none !important; }
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: 200% center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  #list li {
+    opacity: 1;
+  }
+}
