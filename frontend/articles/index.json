@@ -1,5 +1,10 @@
 [
   {
+    "title": "Common failure modes of LLM agents and how to fix them",
+    "file": "2026-10-10-common-failure-modes-of-llm-agents-and-how-to-fix-them.md",
+    "date": "2026-10-10"
+  },
+  {
     "title": "Vector databases and how similarity search works",
     "file": "2026-10-09-vector-databases-and-how-similarity-search-works.md",
     "date": "2026-10-09"
