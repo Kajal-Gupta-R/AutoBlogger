@@ -22,14 +22,12 @@ llm = ChatGroq(
 )
 
 TOPICS = [
-    "How retrieval-augmented generation (RAG) works",
-    "Transformers explained from first principles",
-    "Fine-tuning vs prompt engineering: when to use which",
-    "Vector databases and how similarity search works",
-    "Evaluating LLM applications in production",
-    "How LangGraph models agent workflows as graphs",
-    "Embeddings: turning text into numbers that capture meaning",
-    "Common failure modes of LLM agents and how to fix them",
+        "How to build a RAG chatbot over your own documents",
+    "Voice AI pipelines: speech-to-text, LLM, and text-to-speech",
+    "LLM tool calling: how function calling works under the hood",
+    "Prompt injection: how it works and how to defend against it",
+    "Chunking strategies for RAG and why they matter",
+    "Caching and cost control for LLM applications",
 ]
 
 RETRYABLE = (RateLimitError, APIConnectionError, InternalServerError)

@@ -101,7 +101,7 @@ Then open http://localhost:8000.
 
 - [x] Retries with exponential backoff for transient LLM errors
 - [x] Unit tests for the retry logic
-- [ ] Unit tests for the remaining workflow nodes
+- [x] Unit tests for storage and topic selection (run in CI)
 - [ ] Dockerfile
 - [ ] Support for a second LLM provider
 - [ ] Error monitoring and LLM tracing
