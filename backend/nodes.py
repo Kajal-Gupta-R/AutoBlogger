@@ -1,17 +1,24 @@
 import json
-
-from backend.storage import ARTICLES_DIR
 import random
 
+from groq import APIConnectionError, InternalServerError, RateLimitError
 from langchain_groq import ChatGroq
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from backend.config import settings
 from backend.state import BlogState
+from backend.storage import ARTICLES_DIR
 
 llm = ChatGroq(
     api_key=settings.groq_api_key,
     model=settings.model_name,
     temperature=0.7,
+    max_retries=0,
 )
 
 TOPICS = [
@@ -25,7 +32,15 @@ TOPICS = [
     "Common failure modes of LLM agents and how to fix them",
 ]
 
+RETRYABLE = (RateLimitError, APIConnectionError, InternalServerError)
 
+
+@retry(
+    retry=retry_if_exception_type(RETRYABLE),
+    wait=wait_exponential(multiplier=2, min=4, max=60),
+    stop=stop_after_attempt(5),
+    reraise=True,
+)
 def ask(prompt: str) -> str:
     """Send one prompt to the LLM and return the text reply."""
     return llm.invoke(prompt).content
