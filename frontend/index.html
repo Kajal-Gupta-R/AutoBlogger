@@ -3,21 +3,69 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AutoBlogger</title>
+  <title>AutoBlogger | AI-generated ML deep dives</title>
+  <meta name="description" content="A new machine learning article, written and published automatically every day by a LangGraph pipeline." />
+  <meta name="theme-color" content="#4f46e5" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✍️</text></svg>" />
+  <script>
+    (function () {
+      var t;
+      try { t = localStorage.getItem("theme"); } catch (e) {}
+      if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      document.documentElement.dataset.theme = t;
+    })();
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github-dark.min.css" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js"></script>
 </head>
 <body>
-  <header>
-    <h1><a href="#">AutoBlogger</a></h1>
-    <p>AI-generated deep dives on machine learning</p>
+  <div id="progress" hidden></div>
+
+  <header class="site-header">
+    <div class="bar">
+      <a class="brand" href="#">✍️ AutoBlogger</a>
+      <button id="theme-toggle" type="button" aria-label="Toggle dark or light theme">🌓</button>
+    </div>
   </header>
+
   <main>
-    <ul id="list"></ul>
-    <a id="back" href="#" hidden>&larr; All articles</a>
-    <article id="article" hidden></article>
+    <p id="error" class="error" role="alert" hidden></p>
+
+    <section id="home">
+      <div class="hero">
+        <h1>AI-written deep dives on <span class="grad">machine learning</span></h1>
+        <p>A new article, generated and published automatically every day by a LangGraph pipeline.</p>
+        <div class="stats">
+          <div><strong id="stat-count">0</strong><span>articles</span></div>
+          <div><strong id="stat-latest">-</strong><span>latest</span></div>
+          <div><strong>Daily</strong><span>new post</span></div>
+        </div>
+      </div>
+      <input id="search" type="search" placeholder="Search articles..." aria-label="Search articles" />
+      <ul id="list"></ul>
+      <p id="empty" class="muted" hidden>No articles match your search.</p>
+    </section>
+
+    <section id="reader" hidden>
+      <div class="reader-top">
+        <a id="back" href="#">&larr; All articles</a>
+        <button id="share" type="button">Copy link</button>
+      </div>
+      <p id="meta" class="muted"></p>
+      <article id="article"></article>
+      <nav id="pager"></nav>
+    </section>
   </main>
+
+  <footer>
+    <p>Built by <a href="https://github.com/Kajal-Gupta-R">Kajal Gupta R</a> with LangGraph, Groq and GitHub Actions. <a href="https://github.com/Kajal-Gupta-R/AutoBlogger">View source</a></p>
+    <p class="muted">Articles are AI-generated and may contain errors.</p>
+  </footer>
+
+  <button id="to-top" type="button" aria-label="Back to top" hidden>&uarr;</button>
   <script src="app.js"></script>
 </body>
 </html>
