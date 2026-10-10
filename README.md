@@ -99,8 +99,9 @@ Then open http://localhost:8000.
 
 ## Roadmap
 
-- [ ] Retries and error handling around LLM calls
-- [ ] Unit tests for the workflow nodes
+- [x] Retries with exponential backoff for transient LLM errors
+- [x] Unit tests for the retry logic
+- [ ] Unit tests for the remaining workflow nodes
 - [ ] Dockerfile
 - [ ] Support for a second LLM provider
 - [ ] Error monitoring and LLM tracing
