@@ -23,7 +23,7 @@ GitHub Pages deploy  ->  static site renders Markdown in the browser
 1. **Schedule:** a cron-triggered GitHub Action starts the pipeline every day (it can also be run manually).
 2. **Workflow:** LangGraph runs five nodes that share one typed state object. Each node does a single job and returns only the fields it changes.
 3. **Generation:** `langchain-groq` calls an LLM on Groq for the outline, the draft, and an editor-style review pass.
-4. **Storage:** the final article is saved as a dated Markdown file, and `index.json` lists every article, newest first.
+4. **Storage:** the final article is saved as a dated Markdown file, `index.json` lists every article, and `archive.csv` keeps a spreadsheet-friendly archive with each article's date, title, link, and full Markdown text.
 5. **Publishing:** the bot commits the new files, and a second workflow deploys the `frontend/` folder to GitHub Pages.
 6. **Frontend:** plain HTML, CSS and JavaScript fetch `index.json`, render articles with `marked`, and sanitize the HTML with `DOMPurify`.
 
@@ -59,6 +59,7 @@ backend/
 frontend/
   index.html, app.js, style.css
   articles/     generated Markdown and index.json
+                archive.csv contains the full article history for spreadsheets
 .github/workflows/
   generate.yml  scheduled article generation
   deploy.yml    GitHub Pages deployment
