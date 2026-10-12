@@ -1,5 +1,10 @@
 [
   {
+    "title": "How LangGraph models agent workflows as graphs",
+    "file": "2026-10-12-how-langgraph-models-agent-workflows-as-graphs.md",
+    "date": "2026-10-12"
+  },
+  {
     "title": "Embeddings: turning text into numbers that capture meaning",
     "file": "2026-10-11-embeddings-turning-text-into-numbers-that-capture-meaning.md",
     "date": "2026-10-11"
