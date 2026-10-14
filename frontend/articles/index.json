@@ -1,5 +1,10 @@
 [
   {
+    "title": "How LangGraph models agent workflows as graphs",
+    "file": "2026-10-14-how-langgraph-models-agent-workflows-as-graphs.md",
+    "date": "2026-10-14"
+  },
+  {
     "title": "How retrieval-augmented generation (RAG) works",
     "file": "2026-10-13-how-retrieval-augmented-generation-rag-works.md",
     "date": "2026-10-13"
