@@ -1,6 +1,11 @@
 [
   {
     "title": "How LangGraph models agent workflows as graphs",
+    "file": "2026-10-15-how-langgraph-models-agent-workflows-as-graphs.md",
+    "date": "2026-10-15"
+  },
+  {
+    "title": "How LangGraph models agent workflows as graphs",
     "file": "2026-10-14-how-langgraph-models-agent-workflows-as-graphs.md",
     "date": "2026-10-14"
   },
