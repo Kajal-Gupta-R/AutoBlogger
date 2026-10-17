@@ -1,5 +1,10 @@
 [
   {
+    "title": "How LangGraph models agent workflows as graphs",
+    "file": "2026-10-17-how-langgraph-models-agent-workflows-as-graphs.md",
+    "date": "2026-10-17"
+  },
+  {
     "title": "Common failure modes of LLM agents and how to fix them",
     "file": "2026-10-16-common-failure-modes-of-llm-agents-and-how-to-fix-them.md",
     "date": "2026-10-16"
