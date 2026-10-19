@@ -1,5 +1,10 @@
 [
   {
+    "title": "How retrieval-augmented generation (RAG) works",
+    "file": "2026-10-19-how-retrieval-augmented-generation-rag-works.md",
+    "date": "2026-10-19"
+  },
+  {
     "title": "Transformers explained from first principles",
     "file": "2026-10-18-transformers-explained-from-first-principles.md",
     "date": "2026-10-18"
