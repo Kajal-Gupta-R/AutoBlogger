@@ -1,5 +1,10 @@
 [
   {
+    "title": "Common failure modes of LLM agents and how to fix them",
+    "file": "2026-10-20-common-failure-modes-of-llm-agents-and-how-to-fix-them.md",
+    "date": "2026-10-20"
+  },
+  {
     "title": "How retrieval-augmented generation (RAG) works",
     "file": "2026-10-19-how-retrieval-augmented-generation-rag-works.md",
     "date": "2026-10-19"
