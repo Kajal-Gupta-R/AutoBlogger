@@ -1,5 +1,10 @@
 [
   {
+    "title": "Evaluating LLM applications in production",
+    "file": "2026-10-21-evaluating-llm-applications-in-production.md",
+    "date": "2026-10-21"
+  },
+  {
     "title": "Common failure modes of LLM agents and how to fix them",
     "file": "2026-10-20-common-failure-modes-of-llm-agents-and-how-to-fix-them.md",
     "date": "2026-10-20"
