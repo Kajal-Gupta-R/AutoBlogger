@@ -1,5 +1,10 @@
 [
   {
+    "title": "How retrieval-augmented generation (RAG) works",
+    "file": "2026-10-23-how-retrieval-augmented-generation-rag-works.md",
+    "date": "2026-10-23"
+  },
+  {
     "title": "Evaluating LLM applications in production",
     "file": "2026-10-22-evaluating-llm-applications-in-production.md",
     "date": "2026-10-22"
