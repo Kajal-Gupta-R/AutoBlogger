@@ -1,5 +1,10 @@
 [
   {
+    "title": "Transformers explained from first principles",
+    "file": "2026-10-25-transformers-explained-from-first-principles.md",
+    "date": "2026-10-25"
+  },
+  {
     "title": "How LangGraph models agent workflows as graphs",
     "file": "2026-10-24-how-langgraph-models-agent-workflows-as-graphs.md",
     "date": "2026-10-24"
