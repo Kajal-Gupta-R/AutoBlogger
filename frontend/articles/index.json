@@ -1,5 +1,10 @@
 [
   {
+    "title": "Vector databases and how similarity search works",
+    "file": "2026-10-26-vector-databases-and-how-similarity-search-works.md",
+    "date": "2026-10-26"
+  },
+  {
     "title": "Transformers explained from first principles",
     "file": "2026-10-25-transformers-explained-from-first-principles.md",
     "date": "2026-10-25"
