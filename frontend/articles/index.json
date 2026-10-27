@@ -1,5 +1,10 @@
 [
   {
+    "title": "How LangGraph models agent workflows as graphs",
+    "file": "2026-10-27-how-langgraph-models-agent-workflows-as-graphs.md",
+    "date": "2026-10-27"
+  },
+  {
     "title": "Vector databases and how similarity search works",
     "file": "2026-10-26-vector-databases-and-how-similarity-search-works.md",
     "date": "2026-10-26"
