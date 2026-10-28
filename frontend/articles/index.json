@@ -1,5 +1,10 @@
 [
   {
+    "title": "Fine-tuning vs prompt engineering: when to use which",
+    "file": "2026-10-28-fine-tuning-vs-prompt-engineering-when-to-use-which.md",
+    "date": "2026-10-28"
+  },
+  {
     "title": "How LangGraph models agent workflows as graphs",
     "file": "2026-10-27-how-langgraph-models-agent-workflows-as-graphs.md",
     "date": "2026-10-27"
