@@ -1,5 +1,10 @@
 [
   {
+    "title": "Common failure modes of LLM agents and how to fix them",
+    "file": "2026-10-30-common-failure-modes-of-llm-agents-and-how-to-fix-them.md",
+    "date": "2026-10-30"
+  },
+  {
     "title": "Embeddings: turning text into numbers that capture meaning",
     "file": "2026-10-29-embeddings-turning-text-into-numbers-that-capture-meaning.md",
     "date": "2026-10-29"
