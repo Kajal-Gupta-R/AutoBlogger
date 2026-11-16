@@ -1,9 +1,7 @@
 name: Generate article
 
 on:
-  schedule:
-    - cron: "0 4 * * *"   # every day at 04:00 UTC (9:30 AM IST)
-  workflow_dispatch:       # lets you run it manually from the Actions tab
+  workflow_dispatch:       # run it manually from the Actions tab
 
 permissions:
   contents: write          # needed so the job can push the new article
