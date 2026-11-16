@@ -1,13 +1,13 @@
 # AutoBlogger
 
-An automated blogging pipeline: a manually triggered GitHub Action runs a **LangGraph** workflow that uses an LLM on **Groq** to write a technical ML/AI article, saves it as Markdown, and publishes it to a static site on GitHub Pages.
+An automated blogging pipeline: a scheduled GitHub Action runs a **LangGraph** workflow that uses an LLM on **Groq** to write a technical ML/AI article every day, saves it as Markdown, and publishes it to a static site on GitHub Pages.
 
 **Live site:** https://kajal-gupta-r.github.io/AutoBlogger/
 
 ## How it works
 
 ```
-GitHub Actions (manual trigger)
+GitHub Actions (daily cron)
         |
         v
 START -> pick_topic -> write_outline -> write_draft -> review -> save_article -> END
@@ -20,7 +20,7 @@ frontend/articles/*.md + index.json  ->  committed to the repo
 GitHub Pages deploy  ->  static site renders Markdown in the browser
 ```
 
-1. **Trigger:** start the GitHub Action manually from the Actions tab when you want to generate an article.
+1. **Schedule:** a cron-triggered GitHub Action starts the pipeline every day (it can also be run manually).
 2. **Workflow:** LangGraph runs five nodes that share one typed state object. Each node does a single job and returns only the fields it changes.
 3. **Generation:** `langchain-groq` calls an LLM on Groq for the outline, the draft, and an editor-style review pass.
 4. **Storage:** the final article is saved as a dated Markdown file, `index.json` lists every article, and `archive.csv` keeps a spreadsheet-friendly archive with each article's date, title, link, and full Markdown text.
@@ -61,7 +61,7 @@ frontend/
   articles/     generated Markdown and index.json
                 archive.csv contains the full article history for spreadsheets
 .github/workflows/
-  generate.yml  manually triggered article generation
+  generate.yml  scheduled article generation
   deploy.yml    GitHub Pages deployment
 ```
 
