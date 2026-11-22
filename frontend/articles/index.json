@@ -1,5 +1,10 @@
 [
   {
+    "title": "Vector databases and how similarity search works",
+    "file": "2026-11-22-vector-databases-and-how-similarity-search-works.md",
+    "date": "2026-11-22"
+  },
+  {
     "title": "How retrieval-augmented generation (RAG) works",
     "file": "2026-11-21-how-retrieval-augmented-generation-rag-works.md",
     "date": "2026-11-21"
