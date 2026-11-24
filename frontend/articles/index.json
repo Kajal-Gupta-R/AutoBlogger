@@ -1,5 +1,10 @@
 [
   {
+    "title": "Transformers explained from first principles",
+    "file": "2026-11-24-transformers-explained-from-first-principles.md",
+    "date": "2026-11-24"
+  },
+  {
     "title": "Evaluating LLM applications in production",
     "file": "2026-11-23-evaluating-llm-applications-in-production.md",
     "date": "2026-11-23"
